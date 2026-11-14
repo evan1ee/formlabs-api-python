@@ -1,0 +1,15 @@
+[project]
+name = "formlabs-sw-service"
+version = "0.1.0"
+description = "Formlabs for SOLIDWORKS: Integration Service (spec v1.1)"
+requires-python = ">=3.11"
+dependencies = ["attrs>=22.2", "formlabs-sdk"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["formlabs_sw_service*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

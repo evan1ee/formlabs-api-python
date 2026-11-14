@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <SwRedist Condition="'$(SwRedist)' == ''">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\api\redist</SwRedist>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FormlabsSw.AddIn\FormlabsSw.AddIn.csproj" />
+    <Reference Include="SolidWorks.Interop.sldworks"><HintPath>$(SwRedist)\SolidWorks.Interop.sldworks.dll</HintPath></Reference>
+    <Reference Include="SolidWorks.Interop.swconst"><HintPath>$(SwRedist)\SolidWorks.Interop.swconst.dll</HintPath></Reference>
+    <Reference Include="SolidWorks.Interop.swpublished"><HintPath>$(SwRedist)\SolidWorks.Interop.swpublished.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>
