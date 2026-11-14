@@ -26,10 +26,17 @@ python -m pip install --target $Out --upgrade `
     (Join-Path $repo "") `
     (Join-Path $root "service") --no-warn-script-location
 if ($LASTEXITCODE -ne 0) { throw "pip vendoring failed" }
+# pip leaves build folders next to the sources; remove them so the working tree stays clean.
+foreach ($junk in @((Join-Path $repo "build"), (Join-Path $repo "formlabs_sdk.egg-info"), (Join-Path (Join-Path $root "service") "build"), (Join-Path (Join-Path $root "service") "formlabs_sw_service.egg-info"))) {
+    if (Test-Path $junk) { Remove-Item -Recurse -Force $junk }
+}
 
 # Add-in binaries.
 dotnet build (Join-Path $root "addin\FormlabsSw.AddIn") -c $Config -o $Out --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "add-in build failed" }
+
+# The interop DLLs must sit beside the add-in so COM registration and loading find them.
+Copy-Item (Join-Path $root "addin\third_party\solidworks\*.dll") $Out -Force
 
 # Smoke test: the vendored runtime can import the service and the SDK adapter, with no system Python.
 $env:PYTHONPATH = $Out

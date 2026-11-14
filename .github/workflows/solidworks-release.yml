@@ -1,0 +1,56 @@
+name: SOLIDWORKS add-in release
+
+# Publishes a GitHub Release with the installable zip when a tag like solidworks-v0.1.0 is pushed.
+on:
+  push:
+    tags: ["solidworks-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install the service and the SDK
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m pip install -e "solidworks/service[test]"
+
+      - name: Python tests
+        working-directory: solidworks/service
+        run: python -m pytest -q
+
+      - name: C# core checks
+        run: dotnet run --project solidworks/addin/FormlabsSw.Core.Tests
+
+      - name: Build the release package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^solidworks-', ''
+          ./solidworks/packaging/make_release.ps1 -Version $version -Out "$env:RUNNER_TEMP/release"
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG -replace '^solidworks-', ''
+          $out = "$env:RUNNER_TEMP/release"
+          gh release create $env:TAG `
+            "$out/FormlabsSw-$version-win64.zip" `
+            "$out/SHA256SUMS.txt" `
+            --title "Formlabs for SOLIDWORKS $version" `
+            --notes-file solidworks/docs/RELEASE_NOTES_TEMPLATE.md

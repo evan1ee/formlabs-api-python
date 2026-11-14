@@ -99,6 +99,32 @@ Cautions:
 - PowerShell 7 has no `Marshal.GetActiveObject`.
 - `pip` packaging can leave stray `build/` and `*.egg-info` folders; delete them.
 
-## Releasing
+## Continuous integration and releases
 
-There is no CI yet. Before tagging: run the Python tests and the C# checks, build the install folder with `packaging/build_install.ps1`, run both phase scripts and a harness `send` (a part and an assembly) against PreForm 3.66.0.1146, and update the [changelog](../CHANGELOG.md) and [verification](VERIFICATION.md).
+Two GitHub Actions workflows live in `.github/workflows/`:
+
+| Workflow | Runs on | Does |
+|---|---|---|
+| `solidworks-ci.yml` | Every push to `main` and every pull request that touches `solidworks/`, the SDK or the workflows | Installs the SDK and service, runs the 48 pytest tests, builds the add-in and the harness, runs the C# core checks, builds the full release zip and uploads it as a 14-day build artifact |
+| `solidworks-release.yml` | A pushed tag named `solidworks-v<version>` | Runs the tests, builds the release zip, creates a GitHub Release with the zip and `SHA256SUMS.txt`, and uses [RELEASE_NOTES_TEMPLATE.md](RELEASE_NOTES_TEMPLATE.md) as the notes |
+
+The runners are Windows. They do not have SOLIDWORKS, PreForm or a printer, so CI proves that everything builds, the tests pass and the package assembles. It does not prove the add-in works inside SOLIDWORKS; that is the manual check below.
+
+### Publishing a release
+
+1. Update [CHANGELOG.md](../CHANGELOG.md) and [VERIFICATION.md](VERIFICATION.md).
+2. Run the manual check against PreForm 3.66.0.1146: both phase scripts, then a harness `send` for a part and for an assembly.
+3. Tag and push:
+
+```bash
+git tag solidworks-v0.1.0
+git push origin solidworks-v0.1.0
+```
+
+The workflow publishes `FormlabsSw-v0.1.0-win64.zip`. Users download it from the Releases page ([installation](INSTALL.md#install-from-a-release-most-users)).
+
+### Supply chain notes
+
+- The embedded Python zip is downloaded from python.org and checked against the SHA-256 pinned in `packaging/make_release.ps1`. To move to another Python version, change the URL and the hash together.
+- The SDK is installed from this repository, not from PyPI.
+- `addin/third_party/solidworks/` holds `SolidWorks.Interop.sldworks`, `swconst` and `swpublished` (version 33.0, from SOLIDWORKS 2025's `api\redist` folder). They are Dassault Systèmes files that SOLIDWORKS provides for redistribution with add-ins. Replace them from a newer SOLIDWORKS to target a newer release.

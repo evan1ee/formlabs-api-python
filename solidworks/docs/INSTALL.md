@@ -1,11 +1,21 @@
 # Installation
 
+## Install from a release (most users)
+
+Download `FormlabsSw-<version>-win64.zip` from the project's GitHub Releases page and verify it against `SHA256SUMS.txt`. Unpack it, close SOLIDWORKS, then right-click `Install-FormlabsSw.ps1` and choose *Run with PowerShell*. It asks for administrator rights, copies the add-in to `C:\Program Files\Formlabs for SOLIDWORKS` and registers it. Then continue at [Turn it on in SOLIDWORKS](#3-turn-it-on-in-solidworks) and [Start PreForm](#4-start-preform).
+
+To update, close SOLIDWORKS and run the installer from the newer zip again; it replaces the files. `Uninstall-FormlabsSw.ps1` removes the add-in (your projects are kept).
+
+The zip carries its own Python and libraries and the SOLIDWORKS interop libraries; the PC needs only SOLIDWORKS 2025, .NET Framework 4.x (part of Windows) and PreForm 3.66.0.1146.
+
+The rest of this page is for building the add-in yourself.
+
 ## Requirements
 
 - Windows 10 or 11, 64-bit.
 - SOLIDWORKS 2025.
 - PreForm **3.66.0.1146** with its server started. The service refuses any other build (`PREFORM_SERVER_VERSION_UNSUPPORTED`). Installed copies live under `C:\Program Files\Formlabs\PreForm-beta\3.66.0.1146\`.
-- To build: .NET SDK (the add-in targets .NET Framework 4.8), Python 3.11 or newer on the build machine, and the python.org **3.11 embeddable** zip (download it yourself; the script does not fetch executables).
+- To build: .NET SDK (the add-in targets .NET Framework 4.8), and Python 3.11 or newer on the build machine. `build_install.ps1` needs the python.org **3.11 embeddable** zip; `make_release.ps1` downloads it and checks its SHA-256 for you. The SOLIDWORKS interop DLLs the add-in compiles against are kept in `addin	hird_party\solidworks`, so SOLIDWORKS does not need to be installed on the build machine.
 
 The install folder carries its own Python and libraries. The target machine needs no system Python.
 
@@ -21,6 +31,8 @@ The script:
 2. vendors the pinned `formlabs-sdk`, its generated client and the service into the install folder with `pip --target`;
 3. builds the add-in into the same folder;
 4. runs a smoke test with the embedded interpreter and prints `install OK`.
+
+To produce the same zip that is published as a release, run `.\packaging\make_release.ps1 -Version v0.1.0`. The zip lands in `dist\release`.
 
 The folder then holds `FormlabsSw.AddIn.dll`, `FormlabsSw.Core.dll`, the SOLIDWORKS interop DLLs (copied beside the add-in so registration finds them), `Icons\`, `python\` and the vendored packages.
 

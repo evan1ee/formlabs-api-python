@@ -1,0 +1,53 @@
+name: SOLIDWORKS add-in CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["solidworks/**", ".github/workflows/solidworks-*.yml", "formlabs_sdk/**", "pyproject.toml"]
+  pull_request:
+    paths: ["solidworks/**", ".github/workflows/solidworks-*.yml", "formlabs_sdk/**", "pyproject.toml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install the service and the SDK
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m pip install -e "solidworks/service[test]"
+
+      - name: Python tests
+        working-directory: solidworks/service
+        run: python -m pytest -q
+
+      - name: Build the add-in and the harness
+        run: |
+          dotnet build solidworks/addin/FormlabsSw.AddIn -c Release --nologo -v q
+          dotnet build solidworks/addin/FormlabsSw.Harness -c Release --nologo -v q
+
+      - name: C# core checks
+        run: dotnet run --project solidworks/addin/FormlabsSw.Core.Tests
+
+      - name: Build the release package (checks the packaging end to end)
+        shell: pwsh
+        run: ./solidworks/packaging/make_release.ps1 -Version "ci-${{ github.run_number }}" -Out "$env:RUNNER_TEMP/release"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormlabsSw-ci-${{ github.run_number }}
+          path: ${{ runner.temp }}/release/*.zip
+          retention-days: 14

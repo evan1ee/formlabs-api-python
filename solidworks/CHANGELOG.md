@@ -5,6 +5,7 @@ Newest first. Nothing has been released or committed yet; entries are grouped by
 ## 2026-11-14
 
 ### Added
+- **CI and releases**: GitHub Actions workflows build and test on every change and publish an installable zip (embedded Python, SDK, add-in, installer scripts, checksums) when a `solidworks-v*` tag is pushed. `make_release.ps1`, `Install-FormlabsSw.ps1` and `Uninstall-FormlabsSw.ps1` in `packaging/`. The SOLIDWORKS interop DLLs are kept in `addin/third_party/solidworks` so no SOLIDWORKS install is needed to build.
 - Send from an **assembly**: every visible, unsuppressed part in one batch, each placed as in the assembly and then as the view shows it. No need to open the parts.
 - **Automatic preparation** after a send: save, generate supports (internal supports off), auto layout. A failure is reported without undoing the send.
 - **Material pick-list** limited to Tough 2000 V2, Grey V5, White V5, Clear V5 and Rigid 10K, with a short description of each. Layer is a fixed pick-list.

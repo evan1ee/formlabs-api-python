@@ -5,7 +5,9 @@
     <RootNamespace>FormlabsSw.AddIn</RootNamespace>
     <PlatformTarget>x64</PlatformTarget>
     <RegisterForComInterop>false</RegisterForComInterop>
-    <SwRedist Condition="'$(SwRedist)' == ''">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\api\redist</SwRedist>
+    <!-- The SOLIDWORKS interop DLLs are kept in the repo (addin\third_party\solidworks) so CI and any machine can build
+         without SOLIDWORKS installed. Pass -p:SwRedist=<folder> to build against an installed SOLIDWORKS instead. -->
+    <SwRedist Condition="'$(SwRedist)' == ''">$(MSBuildThisFileDirectory)..\third_party\solidworks</SwRedist>
   </PropertyGroup>
   <ItemGroup>
     <None Include="Icons\*.png" CopyToOutputDirectory="PreserveNewest" LinkBase="Icons" />

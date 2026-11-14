@@ -36,6 +36,8 @@ Supported materials: Tough 2000 V2 (default), Grey V5, White V5, Clear V5, Rigid
 | [Verification](docs/VERIFICATION.md) | What has been tested for real, what has not, open decisions |
 | [Changelog](CHANGELOG.md) | What changed, in order |
 
+CI and releases are described in [Development](docs/DEVELOPMENT.md#continuous-integration-and-releases).
+
 ## Repository layout
 
 ```
@@ -49,12 +51,17 @@ solidworks/
     formlabs_sw_service/     the Integration Service (Python)
     tests/                   pytest suite (fake PreForm port)
     scripts/                 phase0_check.py, phase1_check.py: live checks against a PreForm server
-  packaging/build_install.ps1  builds the install folder (embedded Python, vendored SDK, add-in)
+  packaging/                 build_install.ps1 (install folder), make_release.ps1 (release zip), Install/Uninstall scripts shipped in the zip
+  addin/third_party/         SOLIDWORKS interop DLLs the add-in compiles against
   dist/                      the built install folder (git-ignored)
   docs/                      the documents listed above
 ```
 
-## Quick start
+## Install from a release
+
+Download `FormlabsSw-<version>-win64.zip` from the GitHub Releases page, unpack it, close SOLIDWORKS and run `Install-FormlabsSw.ps1` (right-click, *Run with PowerShell*). Then start PreForm's server and tick the add-in in SOLIDWORKS. A tag named `solidworks-v<version>` triggers the release workflow; see [Development](docs/DEVELOPMENT.md#continuous-integration-and-releases).
+
+## Build it yourself
 
 ```powershell
 # 1. Build the install folder (needs the python.org 3.11 embeddable zip downloaded first)
