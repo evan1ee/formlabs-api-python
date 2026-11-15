@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -28,10 +29,15 @@ class Settings:
         except (OSError, ValueError):
             return {}
 
+    _lock = threading.Lock()  # the GUI thread and the send worker both write settings
+
     def _set(self, key: str, value: str) -> None:
-        data = {**self._read(), key: value}
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        with Settings._lock:
+            data = {**self._read(), key: value}
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            os.replace(tmp, self.path)  # readers never see a half-written file
 
     def _get(self, key: str, default: str) -> str:
         v = self._read().get(key)

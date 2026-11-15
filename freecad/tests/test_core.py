@@ -136,3 +136,27 @@ def test_background_send_reports_failure_in_status(settings, tmp_path):
     bg._thread.join(5)
     assert bg.poll().startswith("Send failed: PreForm is not running")
     assert bg.poll() is None
+
+
+def test_concurrent_settings_writes_never_lose_values(settings):
+    """A torn read used to reset other keys to defaults (a send silently switched material)."""
+    import threading
+
+    settings.material = "FLGPGR05"
+    stop = threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            settings.set_project_dir(settings.projects_root / f"2026-11-15-{i % 5 + 2}")
+            i += 1
+
+    t = threading.Thread(target=writer)
+    t.start()
+    try:
+        for _ in range(300):
+            settings.layer = "0.05"
+            assert settings.material == "FLGPGR05" and settings.layer == "0.05"
+    finally:
+        stop.set()
+        t.join()
