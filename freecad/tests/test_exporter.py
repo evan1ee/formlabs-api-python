@@ -39,6 +39,9 @@ class Matrix:
 
 
 class Placement:
+    def multiply(self, other):
+        return other
+
     def __init__(self, tx=0.0):
         self.Matrix = Matrix(1, 0, 0, tx, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
 
@@ -53,8 +56,12 @@ class Obj:
         self.InList = []
         self._pl = Placement(tx)
 
-    def getGlobalPlacement(self):
+    @property
+    def Placement(self):
         return self._pl
+
+    def getParentGeoFeatureGroup(self):
+        return None
 
 
 class Doc:
@@ -101,16 +108,16 @@ class FakeFC:
 def test_export_writes_files_and_bakes_the_view(tmp_path):
     objs = [Obj("A", tx=10.0), Obj("B")]
     front = orientation.quaternion_to_matrix(0.7071067811865476, 0, 0, 0.7071067811865476)
-    out = exporter.export_objects(Doc(objs), objs, tmp_path, "STEP", "view", front, fc=FakeFC, part=None)
+    out = exporter.export_objects(Doc(objs), objs, tmp_path, "STEP", "view", front, fc=FakeFC)
     assert [b.body_id for b in out] == ["A", "B"]
     assert all(b.file.exists() and b.file.suffix == ".step" for b in out)
     assert out[0].transform[0][3] == pytest.approx(10.0)  # global placement carried into the stored transform
     assert out[0].doc_path == "C:/cad/asm.FCStd"
-    stl = exporter.export_objects(Doc(objs), objs[:1], tmp_path, "STL", "same", None, fc=FakeFC, part=None)
+    stl = exporter.export_objects(Doc(objs), objs[:1], tmp_path, "STL", "same", None, fc=FakeFC)
     assert stl[0].file.suffix == ".stl"
 
 
 def test_duplicate_names_get_unique_ids(tmp_path):
     a, b = Obj("A"), Obj("A")
-    out = exporter.export_objects(Doc([a, b]), [a, b], tmp_path, "STEP", "same", None, fc=FakeFC, part=None)
+    out = exporter.export_objects(Doc([a, b]), [a, b], tmp_path, "STEP", "same", None, fc=FakeFC)
     assert len({o.body_id for o in out}) == 2

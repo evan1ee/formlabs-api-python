@@ -80,7 +80,7 @@ def leaves(objs: list[Any], only_visible: bool) -> list[Any]:
     for o in objs:
         walk(o)
     # A feature's input solids (a Cut's base and tool) are part of the result, not extra parts.
-    inputs = {i.Name for o in found for i in getattr(o, "OutList", []) if i is not o}
+    inputs = {i.Name for o in found if o.TypeId != "App::Link" for i in getattr(o, "OutList", []) if i is not o}
     return [o for o in found if o.Name not in inputs]
 
 
@@ -101,15 +101,22 @@ def _matrix(fc: Any, m: list[list[float]]) -> Any:
     return fc.Matrix(*[m[i][j] for i in range(4) for j in range(4)])
 
 
-def _global_shape(obj: Any, part: Any) -> tuple[Any, list[list[float]]]:
+def _global_placement(obj: Any) -> Any:
+    """Own placement times every containing App::Part's placement (works for links too)."""
+    pl = obj.Placement
+    parent = obj.getParentGeoFeatureGroup()
+    while parent is not None:
+        pl = parent.Placement.multiply(pl)
+        parent = parent.getParentGeoFeatureGroup()
+    return pl
+
+
+def _global_shape(obj: Any) -> tuple[Any, list[list[float]]]:
     """The object's shape in document (global) coordinates, plus its global placement as a 4x4."""
-    if obj.TypeId == "App::Link" or not hasattr(obj, "getGlobalPlacement"):
-        shape = part.getShape(obj).copy()
-        pl = shape.Placement
-    else:
-        shape = obj.Shape.copy()
-        pl = obj.getGlobalPlacement()
-        shape.Placement = pl
+    base = obj.getLinkedObject(True) if obj.TypeId == "App::Link" else obj  # a link shows its target at its own placement
+    shape = base.Shape.copy()
+    pl = _global_placement(obj)
+    shape.Placement = pl
     a = pl.Matrix.A  # 16 numbers, row-major
     return shape, [[float(a[4 * i + j]) for j in range(4)] for i in range(4)]
 
@@ -127,12 +134,9 @@ def export_objects(
     camera_to_world: list[list[float]] | None,
     progress: Callable[[str], None] | None = None,
     fc: Any | None = None,
-    part: Any | None = None,
 ) -> list[ExportedBody]:
     if fc is None:
         import FreeCAD as fc  # type: ignore[no-redef]
-    if part is None and any(o.TypeId == "App::Link" or not hasattr(o, "getGlobalPlacement") for o in objs):
-        import Part as part  # type: ignore[no-redef]  # only links need Part.getShape
     staging.mkdir(parents=True, exist_ok=True)
     rot4 = orientation.to_4x4(orientation.rotation_for(mode, camera_to_world))
     doc_path = getattr(doc, "FileName", "") or f"unsaved:{doc.Name}"
@@ -142,7 +146,7 @@ def export_objects(
         base = sanitize(obj.Name)
         bid = base if base not in used else f"{base}_{len(used)}"
         used.add(bid)
-        shape, placement = _global_shape(obj, part)
+        shape, placement = _global_shape(obj)
         shape.transformShape(_matrix(fc, rot4), True)  # exact geometry copy, no re-tessellation
         file = staging / f"{bid}_{uuid.uuid4().hex[:8]}.{'stl' if fmt == 'STL' else 'step'}"
         if fmt == "STL":

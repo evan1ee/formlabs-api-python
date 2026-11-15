@@ -19,4 +19,4 @@ Feature parity with the SOLIDWORKS version: five materials with descriptions, Fo
 cd freecad && python -m pip install pytest && python -m pytest      # needs solidworks/service importable (its deps: pip install -e ../solidworks/service)
 ```
 
-Status: logic and the full send flow are tested against the real service. **The FreeCAD GUI layer (workbench, panel, view camera, shape export) has not yet been run inside FreeCAD**; this is the main remaining risk. Releases are built by the `freecad-v*` tag workflow.
+Status: the send flow is tested against the real service (pytest). Inside real FreeCAD 1.1 (headless and offscreen GUI) these have been run: command registration, the panel with PySide, collecting visible solids, `Cut` inputs excluded, assemblies (`App::Part` and `App::Link` with correct global placement), STEP and STL export. **Not yet run:** a click on Send with PreForm running, and the camera rotation of a real interactive 3D view (the offscreen view reported the identity). Releases are built by the `freecad-v*` tag workflow.
