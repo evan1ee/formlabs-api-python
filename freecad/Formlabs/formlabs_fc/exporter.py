@@ -125,6 +125,17 @@ def _mul4(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
 
 
+_STEP_COUNTER = re.compile(rb"(translator [0-9.]+ )[0-9]+")
+_STEP_NAME = re.compile(rb"FILE_NAME\('[^']*',\s*'[^']*'")
+
+
+def normalize_step(path: Path) -> None:
+    """STEP stores the export time and file name in its header, so identical geometry would hash differently every
+    time and the service could never see "unchanged". Replace both with fixed values."""
+    data = _STEP_COUNTER.sub(rb"\g<1>1", path.read_bytes())  # "Open CASCADE STEP translator 7.8 3": a per-session counter
+    path.write_bytes(_STEP_NAME.sub(b"FILE_NAME('part','1970-01-01T00:00:00'", data, count=1))
+
+
 def export_objects(
     doc: Any,
     objs: list[Any],
@@ -153,6 +164,7 @@ def export_objects(
             shape.exportStl(str(file))
         else:
             shape.exportStep(str(file))
+            normalize_step(file)
         out.append(ExportedBody(bid, getattr(obj, "Label", obj.Name), file, _mul4(rot4, placement), doc_path))
         if progress:
             progress(obj.Label if hasattr(obj, "Label") else obj.Name)

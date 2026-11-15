@@ -26,7 +26,8 @@ class Shape:
 
     def exportStep(self, path):
         self.exported.append(("step", path))
-        open(path, "wb").write(b"step")
+        open(path, "wb").write(
+            b"HEADER;\nFILE_NAME('C:/tmp/x_ab12.step','2026-11-15T11:32:13',('a'),('b'),'v','o','');\nDATA;")
 
     def exportStl(self, path):
         self.exported.append(("stl", path))
@@ -121,3 +122,18 @@ def test_duplicate_names_get_unique_ids(tmp_path):
     a, b = Obj("A"), Obj("A")
     out = exporter.export_objects(Doc([a, b]), [a, b], tmp_path, "STEP", "same", None, fc=FakeFC)
     assert len({o.body_id for o in out}) == 2
+
+
+def test_step_export_is_deterministic_so_unchanged_parts_are_detected(tmp_path):
+    objs = [Obj("A")]
+    one = exporter.export_objects(Doc(objs), objs, tmp_path / "1", "STEP", "same", None, fc=FakeFC)[0].file.read_bytes()
+    two = exporter.export_objects(Doc(objs), objs, tmp_path / "2", "STEP", "same", None, fc=FakeFC)[0].file.read_bytes()
+    assert one == two and b"1970-01-01" in one and b"ab12" not in one
+
+
+def test_step_translator_counter_is_normalised(tmp_path):
+    f = tmp_path / "x.step"
+    for n in (1, 7):
+        f.write_bytes(f"#7 = PRODUCT('Open CASCADE STEP translator 7.8 {n}','','',(#8));".encode())
+        exporter.normalize_step(f)
+        assert f.read_bytes().endswith(b"7.8 1','','',(#8));")
