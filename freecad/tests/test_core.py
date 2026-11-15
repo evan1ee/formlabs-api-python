@@ -160,3 +160,10 @@ def test_concurrent_settings_writes_never_lose_values(settings):
     finally:
         stop.set()
         t.join()
+
+
+def test_unreachable_preform_gives_a_readable_message():
+    from formlabs_fc.send import friendly
+
+    e = ServiceError("SERVICE_START_FAILED", "cannot connect on 44388: SERVER_UNREACHABLE: no PreFormServer reachable at http://localhost:44388")
+    assert friendly(e).startswith("PreForm is not running")

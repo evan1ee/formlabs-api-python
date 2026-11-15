@@ -133,6 +133,7 @@ class BackgroundSend:
 
 
 def friendly(exc: ServiceError) -> str:
-    if exc.app_code == "PREFORM_NOT_RUNNING":
+    text = str(exc)
+    if exc.app_code == "PREFORM_NOT_RUNNING" or "SERVER_UNREACHABLE" in text or "no PreFormServer reachable" in text:
         return "PreForm is not running. Start PreForm and its server, then send again."
     return str(exc)
