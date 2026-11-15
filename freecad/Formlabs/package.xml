@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>Formlabs</name>
+  <description>Send parts and assemblies to Formlabs PreForm: material, view-based placement, automatic supports and layout.</description>
+  <version>0.1.0</version>
+  <license file="LICENSE">MIT</license>
+  <maintainer email="noreply@example.com">Formlabs for CAD contributors</maintainer>
+  <content>
+    <workbench>
+      <classname>FormlabsWorkbench</classname>
+      <icon>Resources/formlabs.png</icon>
+      <subdirectory>./</subdirectory>
+    </workbench>
+  </content>
+</package>

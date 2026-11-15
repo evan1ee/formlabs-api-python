@@ -1,0 +1,50 @@
+name: FreeCAD workbench
+
+# Tests on every change; a tag like freecad-v0.1.0 also publishes the installable zip as a GitHub Release.
+on:
+  push:
+    branches: [main]
+    paths: ["freecad/**", "solidworks/service/**", "src/**", "pyproject.toml", ".github/workflows/freecad.yml"]
+    tags: ["freecad-v*"]
+  pull_request:
+    paths: ["freecad/**", "solidworks/service/**"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m pip install -e "solidworks/service[test]"
+      - name: Tests
+        run: python -m pytest -q freecad/tests
+      - name: Build the release package
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^freecad-', ''
+          if ("${{ github.ref_type }}" -ne "tag") { $v = "ci-${{ github.run_number }}" }
+          ./freecad/packaging/make_release.ps1 -Version $v -Out "$env:RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormlabsFreeCAD
+          path: ${{ runner.temp }}/release/*
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $v = $env:TAG -replace '^freecad-', ''
+          $out = "$env:RUNNER_TEMP/release"
+          gh release create $env:TAG "$out/FormlabsFreeCAD-$v-win64.zip" "$out/SHA256SUMS-freecad.txt" `
+            --title "Formlabs for FreeCAD $v" --notes-file freecad/docs/USER_GUIDE.md
