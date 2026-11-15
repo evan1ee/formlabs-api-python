@@ -11,7 +11,7 @@ Sends parts and assemblies from FreeCAD to **PreForm** with one click. It does t
 
 Uninstall with `Uninstall-FormlabsFreeCAD.ps1`. Your projects are kept.
 
-The installer copies the workbench to `%APPDATA%\FreeCAD\Mod\Formlabs` and to every versioned folder such as `%APPDATA%\FreeCAD1-1\Mod\Formlabs` (FreeCAD 1.1 reads the versioned one).
+The installer copies the workbench to `%APPDATA%\FreeCAD\Mod\Formlabs` and to every versioned folder such as `%APPDATA%\FreeCAD\v1-1\Mod\Formlabs` (FreeCAD 1.1 reads the versioned one).
 
 Manual install: copy the `Formlabs` folder to `%APPDATA%\FreeCAD\Mod\` (and `v1-1\Mod\` for FreeCAD 1.1) and point `FL_INSTALL_DIR` at a folder that holds `python\python.exe` and the vendored service (for example the SOLIDWORKS install folder).
 
