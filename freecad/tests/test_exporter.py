@@ -137,3 +137,23 @@ def test_step_translator_counter_is_normalised(tmp_path):
         f.write_bytes(f"#7 = PRODUCT('Open CASCADE STEP translator 7.8 {n}','','',(#8));".encode())
         exporter.normalize_step(f)
         assert f.read_bytes().endswith(b"7.8 1','','',(#8));")
+
+
+def test_assembly_referenced_by_a_joint_is_still_collected():
+    """Assembly joints reference the assembly, so it has dependents; it must still count as a root."""
+    p1 = Obj("P1")
+    asm = Obj("Asm", "Assembly::AssemblyObject", solids=None, group=[p1])
+    asm.InList = [Obj("Joint", "App::FeaturePython", solids=None)]
+    assert [o.Name for o in exporter.collect(Doc([asm, p1]), [])] == ["P1"]
+
+
+def test_loose_library_part_instantiated_by_a_link_is_not_sent_twice():
+    base = Obj("Base")
+    link = Obj("LinkBase", "App::Link")
+    link.Shape = None  # resolved through the target at export time
+    link.OutList = [base]
+    link.getLinkedObject = lambda _recursive: base
+    base.InList = [link]
+    link.Shape = Shape()
+    names = [o.Name for o in exporter.collect(Doc([base, link]), [])]
+    assert names == ["LinkBase"]

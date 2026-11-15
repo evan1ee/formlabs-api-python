@@ -84,14 +84,27 @@ def leaves(objs: list[Any], only_visible: bool) -> list[Any]:
     return [o for o in found if o.Name not in inputs]
 
 
+def _is_root(obj: Any) -> bool:
+    """Not inside an App::Part or a group. (Having dependents, such as an assembly joint, does not make it a child.)"""
+    for name in ("getParentGroup", "getParentGeoFeatureGroup"):
+        fn = getattr(obj, name, None)
+        if fn is not None and fn() is not None:
+            return False
+    return True
+
+
+def _is_library_part(obj: Any) -> bool:
+    """A loose part that an assembly instantiates through a link: the link is the instance, not the original."""
+    return any(i.TypeId == "App::Link" for i in getattr(obj, "InList", []))
+
+
 def collect(doc: Any, selection: list[Any]) -> list[Any]:
     """The selection if there is one (hidden objects count when picked), otherwise every visible solid."""
     if selection:
         picked = leaves(selection, only_visible=False)
         if picked:
             return picked
-    top = [o for o in doc.Objects if not getattr(o, "InList", [])]
-    objs = leaves(top, only_visible=True)
+    objs = [o for o in leaves([o for o in doc.Objects if _is_root(o)], only_visible=True) if not (_is_root(o) and _is_library_part(o))]
     if not objs:
         raise ValueError("There is no visible solid to send. Show a part or select one first.")
     return objs
