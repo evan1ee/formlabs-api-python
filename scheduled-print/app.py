@@ -18,7 +18,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from core import (
-    CANCELLED, DONE, FAILED, MISSED, PENDING, RUNNING,
+    CANCELLED, DONE, FAILED, MISSED, PENDING, QUEUED, RUNNING,
     JobStore, PreFormBackend, Scheduler, Settings, find_server_exe, new_job,
 )
 from timefmt import describe, humanize_delta, next_at, parse_when, presets
@@ -29,7 +29,7 @@ DATA_DIR = Path(os.environ.get("APPDATA", Path.home())) / "FormlabsScheduledPrin
 DOWNLOAD_PAGE = "https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/"
 GOOD, WARN, BAD, MUTED = "#1a7f37", "#b35900", "#c62828", "#6b6b6b"
 STATUS_VIEW = {  # status -> (label, tag)
-    PENDING: ("●  Scheduled", "pending"), RUNNING: ("▶  Printing", "running"), DONE: ("✔  Sent", "done"),
+    PENDING: ("●  Scheduled", "pending"), RUNNING: ("▶  Printing", "running"), DONE: ("✔  Sent", "done"), QUEUED: ("▣  Queued only", "queued"),
     FAILED: ("✖  Failed", "failed"), MISSED: ("⚠  Missed", "missed"), CANCELLED: ("⊘  Cancelled", "cancelled"),
 }
 
@@ -199,7 +199,7 @@ class App(tk.Tk):
         for key, title, width in cols:
             self.tree.heading(key, text=title, anchor="w")
             self.tree.column(key, width=self.px(width), anchor="w", stretch=key == "details")
-        for tag, color in (("pending", "#0b5cad"), ("running", WARN), ("done", ""), ("failed", BAD), ("missed", WARN), ("cancelled", MUTED)):
+        for tag, color in (("pending", "#0b5cad"), ("running", WARN), ("done", ""), ("queued", WARN), ("failed", BAD), ("missed", WARN), ("cancelled", MUTED)):
             self.tree.tag_configure(tag, foreground=color)
         scroll = ttk.Scrollbar(card, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
@@ -387,7 +387,11 @@ class App(tk.Tk):
                 self.printer_state.config(text="●  Ready to print now", foreground=GOOD)
             else:
                 status = str(p.get("status") or "unknown")
-                self.printer_state.config(text="●  Not ready" + ("" if status.lower() == "not ready" else f": {status}"), foreground=WARN)
+                self.printer_state.config(
+                    text=f"●  Not ready (PreForm reports: \"{status}\"). A job sent now would only be queued on the printer, "
+                         "not started. Check its screen: build platform, resin tank or cartridge, door, a finished print "
+                         "waiting to be removed.",
+                    foreground=WARN)
         elif self._printers:
             self.printer_state.config(text=f"{len(self._printers)} printer(s) found. Choose one from the list.", foreground=MUTED)
         elif self._printers_error:

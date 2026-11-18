@@ -135,3 +135,59 @@ def test_server_is_spawned_without_a_console_window(monkeypatch):
     assert seen["program"] == "C:/x/other.exe" and "creationflags" not in seen  # only the server is changed
     asyncio.run(core._spawn_without_console("C:/x/PreFormServer.exe"))
     assert seen["creationflags"] == core._CREATE_NO_WINDOW
+
+
+class _Device:
+    def __init__(self, **d):
+        self._d = d
+
+    def to_dict(self):
+        return self._d
+
+
+def _api(devices):
+    return types.SimpleNamespace(list_devices=lambda: types.SimpleNamespace(devices=[_Device(**d) for d in devices]))
+
+
+def test_printer_ready_by_name_or_ip():
+    api = _api([{"id": "A", "ip_address": "10.0.0.5", "ready_to_print_now": True}, {"id": "B", "ready_to_print_now": False}])
+    assert core.PreFormBackend._printer_ready(api, "A") is True
+    assert core.PreFormBackend._printer_ready(api, "10.0.0.5") is True
+    assert core.PreFormBackend._printer_ready(api, "B") is False
+    assert core.PreFormBackend._printer_ready(api, "unknown") is None
+
+
+def test_print_form_reports_queue_only_when_not_ready(monkeypatch, tmp_path):
+    calls = []
+
+    class Api:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def open_form_file(self, file):
+            return types.SimpleNamespace(scenes=[types.SimpleNamespace(scene_id="s1")])
+
+        def print_scene(self, **kw):
+            calls.append(kw)
+
+        def delete_scene(self, scene_id):
+            calls.append(("delete", scene_id))
+
+        def list_devices(self):
+            return types.SimpleNamespace(devices=[_Device(id="P", ready_to_print_now=False)])
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    backend = core.PreFormBackend()
+    monkeypatch.setattr(backend, "_open", lambda start_server=True: (Client(), Api()))
+    outcome = backend.print_form("x.form", "P", "job")
+    assert outcome.started is False and "NOT start" in outcome.message
+    assert calls[0]["printer"] == "P" and ("delete", "s1") in calls

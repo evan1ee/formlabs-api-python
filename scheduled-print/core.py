@@ -16,7 +16,7 @@ from typing import Callable, Protocol
 
 GRACE = timedelta(minutes=10)  # a job overdue by more than this (app was closed) is marked missed, never printed late
 STANDALONE_DIR = Path("C:/PreFormServer")  # where Formlabs's docs put the standalone server
-PENDING, RUNNING, DONE, FAILED, MISSED, CANCELLED = "pending", "running", "done", "failed", "missed", "cancelled"
+PENDING, RUNNING, DONE, QUEUED, FAILED, MISSED, CANCELLED = "pending", "running", "done", "queued", "failed", "missed", "cancelled"
 
 
 @dataclass(frozen=True)
@@ -33,9 +33,17 @@ class Job:
         return datetime.fromisoformat(self.run_at)
 
 
+@dataclass(frozen=True)
+class PrintOutcome:
+    """What happened to a sent job. started=False means the printer was not ready, so the job only waits in its queue."""
+
+    message: str
+    started: bool = True
+
+
 class Backend(Protocol):
     def list_printers(self, start_server: bool = True) -> list[dict]: ...
-    def print_form(self, form_file: str, printer: str, job_name: str) -> str: ...
+    def print_form(self, form_file: str, printer: str, job_name: str) -> str | PrintOutcome: ...
 
 
 def new_job(form_file: str, printer: str, run_at: datetime, now: datetime | None = None) -> Job:
@@ -128,8 +136,9 @@ class Scheduler:
 
     def _run(self, job: Job) -> None:
         try:
-            msg = self.backend.print_form(job.form_file, job.printer, Path(job.form_file).stem)
-            self._update(job.id, status=DONE, message=msg)
+            result = self.backend.print_form(job.form_file, job.printer, Path(job.form_file).stem)
+            outcome = result if isinstance(result, PrintOutcome) else PrintOutcome(str(result))
+            self._update(job.id, status=DONE if outcome.started else QUEUED, message=outcome.message)
         except Exception as exc:  # report every failure on the job; never kill the runner
             self._update(job.id, status=FAILED, message=str(getattr(exc, "message", exc))[:300])
 
@@ -261,7 +270,16 @@ class PreFormBackend:
             if d.get("is_connected") and d.get("product_name") == "Form 4" and d.get("connection_type") != "VIRTUAL"
         ]
 
-    def print_form(self, form_file: str, printer: str, job_name: str) -> str:
+    @staticmethod
+    def _printer_ready(api, printer: str) -> bool | None:
+        """Whether a job sent now would start by itself; None when the printer is not in the device list."""
+        for device in api.list_devices().devices:
+            d = device.to_dict()
+            if printer in (d.get("id"), d.get("ip_address")):
+                return bool(d.get("ready_to_print_now"))
+        return None
+
+    def print_form(self, form_file: str, printer: str, job_name: str) -> PrintOutcome:
         client, api = self._open()
         scene_ids: list[str] = []
         with client, api:
@@ -271,8 +289,15 @@ class PreFormBackend:
                 if not scene_ids:
                     raise RuntimeError("The .form file has no scenes.")
                 # No print_now: prints immediately when the printer is ready, otherwise queues on it.
+                ready = self._printer_ready(api, printer)
                 api.print_scene(scene_id=scene_ids[0], printer=printer, job_name=job_name, find_printer_timeout_seconds=30)
             finally:
                 for sid in scene_ids:
                     api.delete_scene(scene_id=sid)
-        return f"Sent to {printer} at {datetime.now():%H:%M}."
+        if ready is False:
+            return PrintOutcome(
+                f"Queued on {printer} at {datetime.now():%H:%M}, but the printer was not ready, so it will NOT start by itself. "
+                "Start it from the printer's screen.",
+                started=False,
+            )
+        return PrintOutcome(f"Sent to {printer} at {datetime.now():%H:%M}. It starts automatically.")

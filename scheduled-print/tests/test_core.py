@@ -100,3 +100,16 @@ def test_cancel_and_corrupt_store(form, tmp_path):
     s.cancel(job.id)
     s.tick(when + timedelta(minutes=1))
     assert s.jobs[0].status == core.CANCELLED
+
+
+def test_job_is_marked_queued_when_printer_was_not_ready(form, tmp_path):
+    class NotReady(FakeBackend):
+        def print_form(self, *args):
+            return core.PrintOutcome("waiting on the printer", started=False)
+
+    s = core.Scheduler(core.JobStore(tmp_path / "j.json"), NotReady())
+    when = datetime.now() + timedelta(hours=1)
+    s.add(core.new_job(str(form), "P", when))
+    s.tick(when)
+    wait(s, core.QUEUED)
+    assert "waiting" in s.jobs[0].message
