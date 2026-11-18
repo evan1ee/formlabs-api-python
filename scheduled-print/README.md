@@ -13,7 +13,7 @@ Leave the app and PreForm running until the print starts. While a job is pending
 
 ## Getting PreFormServer.exe
 
-PreForm Insider does not include `PreFormServer.exe`. For the app to start the server itself, download the PreForm Server zip for Windows from https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/ , unzip it (for example to `C:\PreFormServer`) and set the path in the app. `C:\PreFormServer\PreFormServer.exe` is found automatically. Without it, start the server from PreForm (File > Start PreForm Server) instead.
+PreForm Insider does not include `PreFormServer.exe`. For the app to start the server itself, download the PreForm Server zip for Windows from https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/ , unzip it (for example to `C:\PreFormServer`) and set the path in the app. Any `PreFormServer.exe` under `C:\PreFormServer` (including the nested folder the zip creates) is found automatically. Without it, start the server from PreForm (File > Start PreForm Server) instead.
 
 ## Behaviour
 

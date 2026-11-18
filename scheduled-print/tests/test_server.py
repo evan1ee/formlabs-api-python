@@ -7,6 +7,7 @@ import core  # noqa: E402
 
 
 def test_find_server_exe_prefers_configured(tmp_path, monkeypatch):
+    monkeypatch.setattr(core, "STANDALONE_DIR", tmp_path / "none")
     exe = tmp_path / "PreFormServer.exe"
     exe.write_bytes(b"x")
     monkeypatch.delenv("FL_PREFORM_SERVER_EXE", raising=False)
@@ -15,6 +16,7 @@ def test_find_server_exe_prefers_configured(tmp_path, monkeypatch):
 
 
 def test_find_server_exe_from_env_and_program_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(core, "STANDALONE_DIR", tmp_path / "none")
     exe = tmp_path / "x" / "PreFormServer.exe"
     exe.parent.mkdir()
     exe.write_bytes(b"x")
@@ -107,3 +109,12 @@ def test_stop_never_touches_external_server(monkeypatch):
     _, backend = _backend(monkeypatch, "C:/x.exe")
     backend.stop_server()  # nothing owned: must not raise
     assert not backend.owns_server()
+
+
+def test_find_server_exe_standalone_nested_folder(tmp_path, monkeypatch):
+    exe = tmp_path / "PreFormServer" / "PreFormServer.exe"  # how the Formlabs zip unpacks
+    exe.parent.mkdir()
+    exe.write_bytes(b"x")
+    monkeypatch.delenv("FL_PREFORM_SERVER_EXE", raising=False)
+    monkeypatch.setattr(core, "STANDALONE_DIR", tmp_path)
+    assert core.find_server_exe("") == str(exe)

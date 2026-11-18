@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 GRACE = timedelta(minutes=10)  # a job overdue by more than this (app was closed) is marked missed, never printed late
+STANDALONE_DIR = Path("C:/PreFormServer")  # where Formlabs's docs put the standalone server
 PENDING, RUNNING, DONE, FAILED, MISSED, CANCELLED = "pending", "running", "done", "failed", "missed", "cancelled"
 
 
@@ -137,9 +138,12 @@ class Scheduler:
 
 def find_server_exe(configured: str = "") -> str:
     """The PreFormServer.exe to launch: the configured path, FL_PREFORM_SERVER_EXE, or one under Program Files\\Formlabs."""
-    for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", ""), r"C:\PreFormServer\PreFormServer.exe"):
+    for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", "")):
         if candidate and Path(candidate).is_file():
             return candidate
+    standalone = sorted(STANDALONE_DIR.glob("**/PreFormServer.exe")) if STANDALONE_DIR.is_dir() else []
+    if standalone:  # the Formlabs zip unpacks to C:\PreFormServer\PreFormServer\PreFormServer.exe
+        return str(standalone[0])
     for root in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", "")):
         base = Path(root) / "Formlabs" if root else None
         if base and base.is_dir():
