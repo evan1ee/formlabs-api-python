@@ -15,6 +15,13 @@ Leave the app and PreForm running until the print starts. While a job is pending
 
 PreForm Insider does not include `PreFormServer.exe`. For the app to start the server itself, download the PreForm Server zip for Windows from https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/ , unzip it (for example to `C:\PreFormServer`) and set the path in the app. Any `PreFormServer.exe` under `C:\PreFormServer` (including the nested folder the zip creates) is found automatically. Without it, start the server from PreForm (File > Start PreForm Server) instead.
 
+## Window
+
+- **New print**: pick the file, the printer and the start time. Quick buttons set "In 1 hour", "Next 02:00" or "Next 08:00". A line under the form says what is missing, or exactly what will happen ("Will print part.form on Form4-LinenLynx, Thu 19 Nov at 02:00 (in 7 h 29 min)"). Schedule Print is enabled only when everything is valid.
+- **Printers**: every detected printer with its name, status (for example "Ready to print" or "Printing") and connection. Click a row to choose that printer.
+- **Scheduled prints**: status with a countdown for pending jobs. Double-click a row for details.
+- **Settings**: the PreFormServer.exe location.
+
 ## Behaviour
 
 - **Start server / Stop server** button: starts PreForm Server (needs the `PreFormServer.exe` path) and keeps it running, so the printer status stays live and there is no startup delay at print time. A server you started in PreForm itself is shown as running but only PreForm can close it. Quitting the app stops a server the app started, and warns if jobs are still scheduled.
