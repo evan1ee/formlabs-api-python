@@ -6,7 +6,7 @@ A small Tkinter app that sends a prepared `.form` file to a Form 4 at a chosen t
 
 1. In PreForm, open **File > Start PreForm Server** (port 44388) and leave PreForm running.
 2. `pip install "formlabs-sdk @ git+https://github.com/Formlabs/formlabs-api-python@v1.0.0-alpha.post2"`
-3. `py -3 app.py`
+3. `py -3 app.py`, or build a standalone exe with `.build.ps1` (output: `distFormlabsScheduledPrint`; zip that folder to move it to another PC, no Python needed. `.distFormlabsScheduledPrintFormlabsScheduledPrint.exe --selftest` writes selftest.log next to the exe)
 4. Pick the `.form` file, pick the printer, enter the date and time, click **Schedule Print**.
 
 Leave the app and PreForm running until the print starts. While a job is pending the app stops Windows from sleeping.

@@ -127,5 +127,23 @@ class App(tk.Tk):
         self.after(1000, self._tick)
 
 
+def selftest() -> int:
+    """Headless check for the packaged exe: SDK imports and PreForm Server answers. Writes selftest.log next to the exe."""
+    import sys
+
+    log = Path(sys.executable).parent / "selftest.log" if getattr(sys, "frozen", False) else Path("selftest.log")
+    try:
+        printers = PreFormBackend().list_printers()
+        log.write_text(f"PASSED: {len(printers)} Form 4 printer(s): {[p['id'] for p in printers]}\n", "utf-8")
+        return 0
+    except Exception as exc:
+        log.write_text(f"FAILED: {type(exc).__name__}: {getattr(exc, 'message', exc)}\n", "utf-8")
+        return 1
+
+
 if __name__ == "__main__":
+    import sys
+
+    if "--selftest" in sys.argv[1:]:
+        sys.exit(selftest())
     App().mainloop()
