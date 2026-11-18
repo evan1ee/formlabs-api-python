@@ -51,8 +51,10 @@ class App(tk.Tk):
         self._build()
         self.refresh()
         self.refresh_printers()
+        self._check_server()
         self.after(PRINTER_POLL_MS, self._poll_printers)
         self._tick()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build(self) -> None:
         f = ttk.Frame(self, padding=10)
@@ -93,9 +95,13 @@ class App(tk.Tk):
         ttk.Label(f, text="PreFormServer.exe").grid(row=6, column=0, sticky="w")
         ttk.Entry(f, textvariable=self.server_var).grid(row=6, column=1, sticky="ew", padx=6)
         ttk.Button(f, text="Browse...", command=self.browse_server).grid(row=6, column=2)
-        ttk.Label(f, text="Optional: lets the app start PreForm Server itself. Empty = PreForm must already be serving.").grid(
+        self.server_state = ttk.Label(f, text="Server: checking...")
+        self.server_state.grid(row=7, column=0, sticky="w")
+        ttk.Label(f, text="Set the path so the app can start PreForm Server for you (also at print time).").grid(
             row=7, column=1, sticky="w", padx=6
         )
+        self.server_btn = ttk.Button(f, text="Start server", command=self.toggle_server)
+        self.server_btn.grid(row=7, column=2)
         self.status = ttk.Label(f, text="")
         self.status.grid(row=8, column=0, columnspan=3, sticky="w")
 
@@ -122,9 +128,9 @@ class App(tk.Tk):
 
         def work() -> None:
             try:
-                found = self.backend.list_printers(start_server=not quiet)  # background polls never start a server
+                found = self.backend.list_printers(start_server=False)  # listing never starts a server; the toggle does
                 printers = {str(p.get("id", "")): p for p in found}
-                msg = "" if printers else "No Form 4 found. Is the PreForm Server running?"
+                msg = "" if printers else "No Form 4 found. Is PreForm Server running? Use Start server."
             except Exception as exc:
                 printers, msg = {}, f"Cannot reach PreForm Server: {getattr(exc, 'message', exc)}"
             self._ui_queue.put(lambda: self._printers_loaded(printers, msg, quiet))
@@ -150,7 +156,53 @@ class App(tk.Tk):
             text = "Not ready" if status.lower() == "not ready" else f"Not ready: {status}"
             self.printer_state.config(text=text, foreground="#b35900")
 
+    def _check_server(self) -> None:
+        def work() -> None:
+            running, owned = self.backend.server_reachable(), self.backend.owns_server()
+            self._ui_queue.put(lambda: self._show_server_state(running, owned))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_server_state(self, running: bool, owned: bool) -> None:
+        if running and owned:
+            self.server_state.config(text="Server: running", foreground="#1a7f37")
+            self.server_btn.config(text="Stop server", state="normal")
+        elif running:
+            self.server_state.config(text="Server: running (PreForm)", foreground="#1a7f37")
+            self.server_btn.config(text="Stop server", state="disabled")  # started in PreForm: close it there
+        else:
+            self.server_state.config(text="Server: stopped", foreground="#b35900")
+            self.server_btn.config(text="Start server", state="normal")
+
+    def toggle_server(self) -> None:
+        stopping = self.backend.owns_server()
+        if stopping and self.scheduler.has_pending() and not messagebox.askyesno(
+            "Stop server", "Print jobs are still scheduled. The app will start the server again at print time if the "
+            "PreFormServer.exe path is set. Stop it now?"
+        ):
+            return
+        self.server_btn.config(state="disabled")
+        self.server_state.config(text="Server: stopping..." if stopping else "Server: starting...", foreground="")
+
+        def work() -> None:
+            try:
+                self.backend.stop_server() if stopping else self.backend.start_server()
+                err = ""
+            except Exception as exc:
+                err = f"Server: {getattr(exc, 'message', exc)}"
+
+            def done() -> None:
+                self._check_server()
+                self.refresh_printers()
+                if err:
+                    self.status.config(text=err)
+
+            self._ui_queue.put(done)
+
+        threading.Thread(target=work, daemon=True).start()
+
     def _poll_printers(self) -> None:
+        self._check_server()
         self.refresh_printers(quiet=True)
         self.after(PRINTER_POLL_MS, self._poll_printers)
 
@@ -181,6 +233,15 @@ class App(tk.Tk):
         for j in sorted(self.scheduler.jobs, key=lambda j: j.run_at):
             self.tree.insert("", "end", iid=j.id, values=(j.run_at.replace("T", " "), j.printer, Path(j.form_file).name, j.status, j.message))
         keep_awake(any(j.status in (PENDING, RUNNING) for j in self.scheduler.jobs))
+
+    def _on_close(self) -> None:
+        if self.scheduler.has_pending() and not messagebox.askyesno(
+            "Quit", "Print jobs are still scheduled and will NOT run if the app is closed. Quit anyway?"
+        ):
+            return
+        keep_awake(False)
+        self.backend.stop_server()  # only a server this app started
+        self.destroy()
 
     def _drain_ui_queue(self) -> None:
         while True:

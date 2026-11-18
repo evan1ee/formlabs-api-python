@@ -13,6 +13,8 @@ Leave the app and PreForm running until the print starts. While a job is pending
 
 ## Behaviour
 
+- **Start server / Stop server** button: starts PreForm Server (needs the `PreFormServer.exe` path) and keeps it running, so the printer status stays live and there is no startup delay at print time. A server you started in PreForm itself is shown as running but only PreForm can close it. Quitting the app stops a server the app started, and warns if jobs are still scheduled.
+
 - The printer list shows whether the selected Form 4 is ready to print right now, refreshed every 30 seconds while a server is running.
 
 - Orientation, supports and print settings come from the `.form` file as saved. The app does not change them.

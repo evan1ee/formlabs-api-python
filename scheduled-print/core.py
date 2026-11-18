@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+import urllib.request
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
@@ -177,6 +178,43 @@ class PreFormBackend:
     def __init__(self, port: int = 44388, server_exe: Callable[[], str] = lambda: ""):
         self.port = port
         self.server_exe = server_exe  # called each time, so a changed setting applies to the next job
+        self._owner = None  # the SDK client that started (and so owns) the server, while the toggle has it on
+        self._owner_lock = threading.Lock()
+
+    def server_reachable(self) -> bool:
+        try:
+            with urllib.request.urlopen(f"http://localhost:{self.port}/v1/", timeout=2):  # noqa: S310 - fixed localhost URL
+                return True
+        except OSError:
+            return False
+
+    def owns_server(self) -> bool:
+        return self._owner is not None
+
+    def start_server(self) -> None:
+        """Start PreFormServer and keep it running until stop_server(). A server already running is left alone."""
+        from formlabs_sdk import FormlabsClient
+
+        with self._owner_lock:
+            if self._owner is not None or self.server_reachable():
+                return
+            exe = find_server_exe(self.server_exe())
+            if not exe:
+                raise ValueError("Set the PreFormServer.exe path first.")
+            client = FormlabsClient()
+            try:
+                client.preform.launch(exe, port=self.port)
+            except Exception:
+                client.close()
+                raise
+            self._owner = client
+
+    def stop_server(self) -> None:
+        """Stop a server this app started. One started in PreForm itself is never stopped."""
+        with self._owner_lock:
+            owner, self._owner = self._owner, None
+        if owner is not None:
+            owner.close()
 
     def _open(self, start_server: bool = True):
         from formlabs_sdk import FormlabsClient  # imported lazily so the core is testable without the SDK

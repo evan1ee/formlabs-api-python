@@ -68,3 +68,42 @@ def test_backend_connects_when_no_exe(monkeypatch):
     fake, backend = _backend(monkeypatch, "")
     backend._open()
     assert fake.calls == [("connect", {"port": 1234})]
+
+
+def test_start_server_requires_exe(monkeypatch):
+    _, backend = _backend(monkeypatch, "")
+    monkeypatch.setattr(backend, "server_reachable", lambda: False)
+    try:
+        backend.start_server()
+    except ValueError as exc:
+        assert "PreFormServer.exe" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_start_then_stop_owns_and_closes(monkeypatch):
+    closed = []
+
+    class Client:
+        def __init__(self):
+            self.preform = types.SimpleNamespace(launch=lambda exe, **kw: closed.append(("launch", exe, kw)))
+
+        def close(self):
+            closed.append("close")
+
+    monkeypatch.setitem(sys.modules, "formlabs_sdk", types.SimpleNamespace(FormlabsClient=Client))
+    monkeypatch.setattr(core, "find_server_exe", lambda configured="": configured)
+    backend = core.PreFormBackend(port=9, server_exe=lambda: "C:/PreFormServer.exe")
+    monkeypatch.setattr(backend, "server_reachable", lambda: False)
+    backend.start_server()
+    assert backend.owns_server()
+    backend.start_server()  # second call is a no-op
+    backend.stop_server()
+    assert not backend.owns_server()
+    assert closed == [("launch", "C:/PreFormServer.exe", {"port": 9}), "close"]
+
+
+def test_stop_never_touches_external_server(monkeypatch):
+    _, backend = _backend(monkeypatch, "C:/x.exe")
+    backend.stop_server()  # nothing owned: must not raise
+    assert not backend.owns_server()
