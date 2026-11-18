@@ -34,7 +34,8 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Form 4 Scheduled Print")
-        self.geometry("760x460")
+        self.geometry("800x600")
+        self.minsize(720, 520)
         self.settings = Settings(DATA_DIR / "settings.json")
         self.server_var = tk.StringVar(value=self.settings.get("server_exe") or find_server_exe())
         self._server_exe = self.server_var.get()  # cached: worker threads must not touch tk variables
@@ -141,12 +142,23 @@ class App(tk.Tk):
         self._refreshing = False
         if printers or not quiet:  # a failed background poll keeps the last known list
             self._printers = printers
-            self.printer_box.config(values=list(printers))
+            self.printer_box.config(values=[self._label(p) for p in printers.values()])
             self.status.config(text=msg)
         self._show_printer_state()
 
+    @staticmethod
+    def _label(p: dict) -> str:
+        """Dropdown text: the printer name and whether it can print right now."""
+        status = str(p.get("status") or "unknown")
+        state = "Ready to print" if p.get("ready_to_print_now") else ("Not ready" if status.lower() == "not ready" else f"Not ready ({status})")
+        return f"{p.get('id', '')}  -  {state}"
+
+    def _selected_printer(self) -> dict | None:
+        text = self.printer_var.get().strip()
+        return next((p for p in self._printers.values() if text in (self._label(p), str(p.get("id")))), None)
+
     def _show_printer_state(self) -> None:
-        p = self._printers.get(self.printer_var.get().strip())
+        p = self._selected_printer()
         if p is None:
             self.printer_state.config(text="", foreground="")
         elif p.get("ready_to_print_now"):
@@ -209,7 +221,7 @@ class App(tk.Tk):
     def schedule(self) -> None:
         try:
             run_at = datetime.strptime(f"{self.date_var.get().strip()} {self.time_var.get().strip()}", "%Y-%m-%d %H:%M")
-            self.scheduler.add(new_job(self.form_var.get(), self.printer_var.get(), run_at))
+            self.scheduler.add(new_job(self.form_var.get(), str((self._selected_printer() or {}).get("id") or self.printer_var.get()), run_at))
         except ValueError as exc:
             messagebox.showerror("Cannot schedule", str(exc))
 
