@@ -1,0 +1,79 @@
+name: Scheduled Print app
+
+# Tests and builds the exe on every change. A tag like scheduled-print-v0.1.0 also publishes the zip as a GitHub Release.
+on:
+  push:
+    branches: [main]
+    paths: ["scheduled-print/**", "formlabs_sdk/**", "pyproject.toml", ".github/workflows/scheduled-print.yml"]
+    tags: ["scheduled-print-v*"]
+  pull_request:
+    paths: ["scheduled-print/**"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+          python -m pip install pytest pyinstaller
+
+      - name: Tests
+        run: python -m pytest -q scheduled-print/tests
+
+      - name: Build the exe
+        shell: pwsh
+        run: ./scheduled-print/build.ps1
+
+      - name: Check the packaged exe starts and finds the SDK
+        shell: pwsh
+        working-directory: scheduled-print/dist/FormlabsScheduledPrint
+        run: |
+          # No PreForm Server on the runner, so a clean "no PreFormServer reachable" is the expected result.
+          # A missing module or a crash means the bundle is broken.
+          $p = Start-Process ./FormlabsScheduledPrint.exe -ArgumentList "--selftest" -PassThru -Wait
+          $log = Get-Content selftest.log -Raw
+          Write-Host $log
+          if ($log -notmatch '^(PASSED|FAILED: PreFormApiError)') { throw "Packaged exe is broken: $log" }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^scheduled-print-', ''
+          if ("${{ github.ref_type }}" -ne "tag") { $v = "ci-${{ github.run_number }}" }
+          $out = "$env:RUNNER_TEMP/release"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Remove-Item scheduled-print/dist/FormlabsScheduledPrint/selftest.log -ErrorAction SilentlyContinue
+          $zip = "$out/FormlabsScheduledPrint-$v-win64.zip"
+          Compress-Archive -Path scheduled-print/dist/FormlabsScheduledPrint -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$out/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormlabsScheduledPrint
+          path: ${{ runner.temp }}/release/*
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $v = $env:TAG -replace '^scheduled-print-', ''
+          $out = "$env:RUNNER_TEMP/release"
+          gh release create $env:TAG `
+            "$out/FormlabsScheduledPrint-$v-win64.zip" `
+            "$out/SHA256SUMS.txt" `
+            --title "Form 4 Scheduled Print $v" `
+            --notes "Unzip, run FormlabsScheduledPrint.exe. Needs PreForm (Insider) installed: see the README in scheduled-print/ for how the app starts or finds PreForm Server."

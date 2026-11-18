@@ -4,7 +4,7 @@ A small Tkinter app that sends a prepared `.form` file to a Form 4 at a chosen t
 
 ## Use
 
-1. In PreForm, open **File > Start PreForm Server** (port 44388) and leave PreForm running.
+1. Either open PreForm and choose **File > Start PreForm Server** (port 44388), or set the **PreFormServer.exe** path in the app (it is found automatically under `Program Files\Formlabs` when present) and the app starts the server itself when it needs one. A server that is already running is reused.
 2. `pip install "formlabs-sdk @ git+https://github.com/Formlabs/formlabs-api-python@v1.0.0-alpha.post2"`
 3. `py -3 app.py`, or build a standalone exe with `.build.ps1` (output: `distFormlabsScheduledPrint`; zip that folder to move it to another PC, no Python needed. `.distFormlabsScheduledPrintFormlabsScheduledPrint.exe --selftest` writes selftest.log next to the exe)
 4. Pick the `.form` file, pick the printer, enter the date and time, click **Schedule Print**.
@@ -13,11 +13,17 @@ Leave the app and PreForm running until the print starts. While a job is pending
 
 ## Behaviour
 
+- The printer list shows whether the selected Form 4 is ready to print right now, refreshed every 30 seconds while a server is running.
+
 - Orientation, supports and print settings come from the `.form` file as saved. The app does not change them.
 - Jobs are saved in `%APPDATA%\FormlabsScheduledPrint\jobs.json` and survive a restart.
 - A job that is more than 10 minutes overdue when the app starts is marked **missed** and is not printed.
 - At the scheduled time the job is sent to the printer. If the printer is ready it starts at once. If not, the job is queued on the printer.
 - Failures (PreForm Server not running, printer offline) show in the Message column.
+
+## Releases
+
+Pushing a tag such as `scheduled-print-v0.1.0` runs `.github/workflows/scheduled-print.yml`, which tests, builds the exe and publishes `FormlabsScheduledPrint-<version>-win64.zip` (with SHA256SUMS.txt) as a GitHub Release. Other users download the zip, unzip it and run the exe. Every push to main also uploads the zip as a workflow artifact.
 
 ## Tests
 

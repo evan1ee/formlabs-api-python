@@ -31,7 +31,7 @@ class Job:
 
 
 class Backend(Protocol):
-    def list_printers(self) -> list[dict]: ...
+    def list_printers(self, start_server: bool = True) -> list[dict]: ...
     def print_form(self, form_file: str, printer: str, job_name: str) -> str: ...
 
 
@@ -134,20 +134,62 @@ class Scheduler:
         return any(j.status in (PENDING, RUNNING) for j in self.jobs)
 
 
+def find_server_exe(configured: str = "") -> str:
+    """The PreFormServer.exe to launch: the configured path, FL_PREFORM_SERVER_EXE, or one under Program Files\\Formlabs."""
+    for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", "")):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    for root in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", "")):
+        base = Path(root) / "Formlabs" if root else None
+        if base and base.is_dir():
+            found = sorted(base.glob("**/PreFormServer.exe"), reverse=True)  # newest version folder first
+            if found:
+                return str(found[0])
+    return ""
+
+
+class Settings:
+    """Small JSON file next to the job list (currently just the PreFormServer.exe path)."""
+
+    def __init__(self, path: Path):
+        self.path = path
+
+    def get(self, key: str, default: str = "") -> str:
+        try:
+            return str(json.loads(self.path.read_text("utf-8")).get(key, default))
+        except (OSError, ValueError, AttributeError):
+            return default
+
+    def set(self, key: str, value: str) -> None:
+        try:
+            data = json.loads(self.path.read_text("utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({**data, key: value}, indent=2), "utf-8")
+        os.replace(tmp, self.path)
+
+
 class PreFormBackend:
     """Talks to a running PreForm Server (PreForm > File > Start PreForm Server, port 44388)."""
 
-    def __init__(self, port: int = 44388):
+    def __init__(self, port: int = 44388, server_exe: Callable[[], str] = lambda: ""):
         self.port = port
+        self.server_exe = server_exe  # called each time, so a changed setting applies to the next job
 
-    def _open(self):
+    def _open(self, start_server: bool = True):
         from formlabs_sdk import FormlabsClient  # imported lazily so the core is testable without the SDK
 
         client = FormlabsClient()
+        exe = find_server_exe(self.server_exe()) if start_server else ""
+        if exe:
+            # Use a server that is already running; otherwise start one and stop it when the call is done.
+            return client, client.preform.launch(exe, port=self.port, reuse_existing=True)
         return client, client.preform.connect(port=self.port)
 
-    def list_printers(self) -> list[dict]:
-        client, api = self._open()
+    def list_printers(self, start_server: bool = True) -> list[dict]:
+        client, api = self._open(start_server)
         with client, api:
             found = [d.to_dict() for d in api.list_devices().devices]
         return [
