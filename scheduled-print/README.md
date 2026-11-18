@@ -11,6 +11,10 @@ A small Tkinter app that sends a prepared `.form` file to a Form 4 at a chosen t
 
 Leave the app and PreForm running until the print starts. While a job is pending the app stops Windows from sleeping.
 
+## Getting PreFormServer.exe
+
+PreForm Insider does not include `PreFormServer.exe`. For the app to start the server itself, download the PreForm Server zip for Windows from https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/ , unzip it (for example to `C:\PreFormServer`) and set the path in the app. `C:\PreFormServer\PreFormServer.exe` is found automatically. Without it, start the server from PreForm (File > Start PreForm Server) instead.
+
 ## Behaviour
 
 - **Start server / Stop server** button: starts PreForm Server (needs the `PreFormServer.exe` path) and keeps it running, so the printer status stays live and there is no startup delay at print time. A server you started in PreForm itself is shown as running but only PreForm can close it. Quitting the app stops a server the app started, and warns if jobs are still scheduled.

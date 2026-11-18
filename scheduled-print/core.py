@@ -137,7 +137,7 @@ class Scheduler:
 
 def find_server_exe(configured: str = "") -> str:
     """The PreFormServer.exe to launch: the configured path, FL_PREFORM_SERVER_EXE, or one under Program Files\\Formlabs."""
-    for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", "")):
+    for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", ""), r"C:\PreFormServer\PreFormServer.exe"):
         if candidate and Path(candidate).is_file():
             return candidate
     for root in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("ProgramFiles(x86)", "")):
@@ -200,7 +200,10 @@ class PreFormBackend:
                 return
             exe = find_server_exe(self.server_exe())
             if not exe:
-                raise ValueError("Set the PreFormServer.exe path first.")
+                raise ValueError(
+                    "PreFormServer.exe not found. It is a separate download from Formlabs (not part of PreForm): "
+                    "unzip it, e.g. to C:/PreFormServer, and set its path below. Or start the server in PreForm: File > Start PreForm Server."
+                )
             client = FormlabsClient()
             try:
                 client.preform.launch(exe, port=self.port)
