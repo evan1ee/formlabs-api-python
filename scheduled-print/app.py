@@ -18,7 +18,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from core import (
-    CANCELLED, DONE, FAILED, MISSED, PENDING, QUEUED, RUNNING,
+    CANCELLED, DONE, FAILED, MISSED, NEEDS_ATTENTION, PENDING, QUEUED, RUNNING, WAITING,
     JobStore, PreFormBackend, Scheduler, Settings, find_server_exe, new_job,
 )
 from timefmt import describe, humanize_delta, next_at, parse_when, presets
@@ -29,7 +29,7 @@ DATA_DIR = Path(os.environ.get("APPDATA", Path.home())) / "FormlabsScheduledPrin
 DOWNLOAD_PAGE = "https://formlabs.com/support/Formlabs-API-downloads-and-release-notes/"
 GOOD, WARN, BAD, MUTED = "#1a7f37", "#b35900", "#c62828", "#6b6b6b"
 STATUS_VIEW = {  # status -> (label, tag)
-    PENDING: ("●  Scheduled", "pending"), RUNNING: ("▶  Printing", "running"), DONE: ("✔  Sent", "done"), QUEUED: ("▣  Queued only", "queued"),
+    PENDING: ("●  Scheduled", "pending"), RUNNING: ("▶  Printing", "running"), DONE: ("✔  Sent", "done"), QUEUED: ("▣  Queued only", "queued"), WAITING: ("◌  Waiting for printer", "waiting"),
     FAILED: ("✖  Failed", "failed"), MISSED: ("⚠  Missed", "missed"), CANCELLED: ("⊘  Cancelled", "cancelled"),
 }
 
@@ -53,7 +53,13 @@ class App(tk.Tk):
         self.server_var = tk.StringVar(value=self.settings.get("server_exe") or find_server_exe())
         self._server_exe = self.server_var.get()  # cached: worker threads must not touch tk variables
         self.backend = PreFormBackend(server_exe=lambda: self._server_exe)
-        self.scheduler = Scheduler(JobStore(DATA_DIR / "jobs.json"), self.backend, on_change=self._changed)
+        self._wait_minutes = self._saved_wait_minutes()
+        self.wait_var = tk.IntVar(value=self._wait_minutes)
+        self.wait_var.trace_add("write", self._wait_changed)
+        self.scheduler = Scheduler(
+            JobStore(DATA_DIR / "jobs.json"), self.backend, on_change=self._changed,
+            wait_window=lambda: timedelta(minutes=self._wait_minutes),  # read from worker threads: a plain int, not a tk variable
+        )
         self.form_var, self.printer_var = tk.StringVar(), tk.StringVar()
         self.date_var, self.hour_var, self.minute_var = tk.StringVar(), tk.StringVar(), tk.StringVar()
         self._printers: dict[str, dict] = {}
@@ -107,8 +113,10 @@ class App(tk.Tk):
         bar.columnconfigure(0, weight=1)
         self.status = ttk.Label(bar, text="", style="Hint.TLabel")
         self.status.grid(row=0, column=0, sticky="w")
+        self.attention = ttk.Label(bar, text="", foreground=BAD)
+        self.attention.grid(row=0, column=1, sticky="e", padx=(0, 12))
         self.awake_note = ttk.Label(bar, text="", style="Hint.TLabel")
-        self.awake_note.grid(row=0, column=1, sticky="e")
+        self.awake_note.grid(row=0, column=2, sticky="e")
 
     def _build_header(self, root: ttk.Frame) -> None:
         head = ttk.Frame(root)
@@ -199,7 +207,7 @@ class App(tk.Tk):
         for key, title, width in cols:
             self.tree.heading(key, text=title, anchor="w")
             self.tree.column(key, width=self.px(width), anchor="w", stretch=key == "details")
-        for tag, color in (("pending", "#0b5cad"), ("running", WARN), ("done", ""), ("queued", WARN), ("failed", BAD), ("missed", WARN), ("cancelled", MUTED)):
+        for tag, color in (("pending", "#0b5cad"), ("running", WARN), ("done", ""), ("queued", WARN), ("waiting", WARN), ("failed", BAD), ("missed", WARN), ("cancelled", MUTED)):
             self.tree.tag_configure(tag, foreground=color)
         scroll = ttk.Scrollbar(card, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
@@ -296,7 +304,7 @@ class App(tk.Tk):
         warnings = []
         chosen = self._selected_printer()
         if chosen is not None and not chosen.get("ready_to_print_now"):
-            warnings.append(f"{printer} is not ready to print right now ({chosen.get('status', 'unknown')}). If it is still not ready at the start time, the job is queued on the printer instead of starting.")
+            warnings.append(f"{printer} is not ready to print right now ({chosen.get('status', 'unknown')}). If it is still not ready at the start time, the app keeps checking for up to {self._wait_minutes} minutes and starts the print as soon as it is ready. If it never is, the job is only queued on the printer and will not start by itself.")
         if not self._server_running and not self._has_exe:
             warnings.append("PreForm Server is not running and PreFormServer.exe is not set, so the print will fail unless you start the server before then.")
         if warnings and not messagebox.askyesno("Schedule anyway?", "\n\n".join(warnings) + "\n\nSchedule this print anyway?"):
@@ -468,13 +476,35 @@ class App(tk.Tk):
                        "Formlabs (not part of PreForm). Leave it empty if you start the server in PreForm yourself.").grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 8))
         ttk.Entry(body, textvariable=self.server_var, width=52).grid(row=2, column=0, sticky="ew")
         ttk.Button(body, text="Browse...", command=self.browse_server).grid(row=2, column=1, padx=(6, 0))
+        ttk.Label(body, text="If the printer is not ready", font=("Segoe UI", 10, "bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(16, 0))
+        wait = ttk.Frame(body)
+        wait.grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        ttk.Label(wait, text="Keep checking for up to").pack(side="left")
+        ttk.Spinbox(wait, from_=0, to=720, width=5, textvariable=self.wait_var, justify="center").pack(side="left", padx=6)
+        ttk.Label(wait, text="minutes after the start time, and start as soon as it is ready.").pack(side="left")
+        ttk.Label(body, wraplength=self.px(460), justify="left", style="Hint.TLabel",
+                  text="If it never becomes ready, the job is only queued on the printer and will not start by itself "
+                       "(it is shown as Queued only). 0 means do not wait.").grid(row=5, column=0, columnspan=2, sticky="w", pady=(2, 0))
         buttons = ttk.Frame(body)
-        buttons.grid(row=3, column=0, columnspan=2, sticky="e", pady=(14, 0))
+        buttons.grid(row=6, column=0, columnspan=2, sticky="e", pady=(14, 0))
         ttk.Button(buttons, text="Open download page", command=lambda: webbrowser.open(DOWNLOAD_PAGE)).pack(side="left", padx=(0, 6))
         ttk.Button(buttons, text="Done", style="Accent.TButton", command=win.destroy).pack(side="left")
         win.update_idletasks()
         win.geometry(f"+{self.winfo_rootx() + 80}+{self.winfo_rooty() + 80}")
         win.grab_set()
+
+    def _saved_wait_minutes(self) -> int:
+        try:
+            return max(0, min(720, int(self.settings.get("wait_minutes") or 60)))
+        except ValueError:
+            return 60
+
+    def _wait_changed(self, *_: object) -> None:
+        try:
+            self._wait_minutes = max(0, min(720, int(self.wait_var.get())))
+        except (tk.TclError, ValueError):
+            return  # the box is empty or half typed
+        self.settings.set("wait_minutes", str(self._wait_minutes))
 
     def browse_server(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("PreFormServer", "PreFormServer.exe"), ("Programs", "*.exe")])
@@ -493,11 +523,11 @@ class App(tk.Tk):
 
     def _update_job_buttons(self) -> None:
         job = self._selected_job()
-        self.cancel_btn.config(state="normal" if job is not None and job.status == PENDING else "disabled")
+        self.cancel_btn.config(state="normal" if job is not None and job.status in (PENDING, WAITING) else "disabled")
 
     def cancel(self) -> None:
         job = self._selected_job()
-        if job is not None and job.status == PENDING:
+        if job is not None and job.status in (PENDING, WAITING):
             self.scheduler.cancel(job.id)
 
     def remove(self) -> None:
@@ -534,6 +564,8 @@ class App(tk.Tk):
         pending = self.scheduler.has_pending()
         keep_awake(pending)
         self.awake_note.config(text="Windows will stay awake until these prints start." if pending else "")
+        problems = sum(j.status in NEEDS_ATTENTION for j in self.scheduler.jobs)
+        self.attention.config(text=f"⚠ {problems} print(s) did not start by themselves. Double-click a row for details." if problems else "")
         self._update_job_buttons()
 
     def _refresh_countdowns(self) -> None:
@@ -559,11 +591,17 @@ class App(tk.Tk):
                 return
 
     def _tick(self) -> None:
-        self._drain_ui_queue()
-        self.scheduler.tick()
-        self._refresh_countdowns()
-        self._update_summary()  # keeps "in 3 h 20 min" and the in-the-past check current
-        self.after(1000, self._tick)
+        try:
+            self._drain_ui_queue()
+            self.scheduler.tick()
+            self._refresh_countdowns()
+            self._update_summary()  # keeps "in 3 h 20 min" and the in-the-past check current
+            if self.scheduler.store_error:
+                self.status.config(text=self.scheduler.store_error, foreground=BAD)
+        except Exception as exc:  # an error here must never stop the timer that starts the prints
+            self.status.config(text=f"Internal error (the app keeps running): {exc}", foreground=BAD)
+        finally:
+            self.after(1000, self._tick)
 
 
 def selftest() -> int:
@@ -580,6 +618,18 @@ def selftest() -> int:
         return 1
 
 
+_instance_handle = None  # kept for the life of the process so the mutex stays held
+
+
+def another_copy_is_running(name: str = "Local\\FormlabsScheduledPrint") -> bool:
+    """Two copies share one job list and would each start the same print."""
+    global _instance_handle
+    if os.name != "nt":
+        return False
+    _instance_handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
+    return ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+
+
 if __name__ == "__main__":
     import sys
 
@@ -589,4 +639,9 @@ if __name__ == "__main__":
         ctypes.windll.shcore.SetProcessDpiAwareness(1)  # crisp text on high-DPI screens
     except (AttributeError, OSError):
         pass
+    if another_copy_is_running():
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showwarning("Already running", "Form 4 Scheduled Print is already open. Two copies would start the same print twice, so this one will close.")
+        sys.exit(1)
     App().mainloop()

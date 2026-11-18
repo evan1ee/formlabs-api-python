@@ -38,6 +38,26 @@ PreForm Insider does not include `PreFormServer.exe`. For the app to start the s
 
 Pushing a tag such as `scheduled-print-v0.1.0` runs `.github/workflows/scheduled-print.yml`, which tests, builds the exe and publishes `FormlabsScheduledPrint-<version>-win64.zip` (with SHA256SUMS.txt) as a GitHub Release. Other users download the zip, unzip it and run the exe. Every push to main also uploads the zip as a workflow artifact.
 
+## If something goes wrong
+
+The app never guesses about a print that may already have been sent. What it does in each case:
+
+| Situation at the start time | What happens |
+|---|---|
+| Printer not ready (busy, door open, no cartridge...) | The job shows **Waiting for printer**, rechecks every 15 s and starts as soon as the printer is ready. The wait is set in Settings (default 60 min; 0 = do not wait). |
+| Printer never becomes ready in that time | The job is only queued on the printer and shown as **Queued only**: it will not start by itself, start it from the printer's screen. |
+| PreForm Server not running or cannot start | Retried during the same wait time. If it never comes back the job **Failed** with "nothing was sent". |
+| Printer turned not-ready just before sending | Retried; PreForm refuses the job before uploading, so it cannot print twice. |
+| Connection lost or timed out while sending | **Failed**, not retried: the job may already be on the printer, so check its queue before scheduling again. |
+| `.form` file moved or deleted | **Failed** at once, with the file name. |
+| PreForm rejected the job (out of bounds, not sliceable, login needed...) | **Failed** with PreForm's message. |
+| App was closed or the PC was off at the start time | **Missed**: nothing is printed late (more than 10 minutes after the time). Closed while waiting: Missed. Closed while sending: Failed with a reminder to check the printer queue. |
+| A second copy of the app is opened | It closes itself, because two copies would start the same print twice. |
+| The job list cannot be saved (disk full, permissions) | The app keeps running and shows a red error. |
+| A `.form` file with several scenes | Only the first scene is sent, and the job says so. |
+
+Jobs that did not start by themselves are counted in red at the bottom of the window.
+
 ## Tests
 
 `py -3 -m pytest tests` runs the scheduler against a fake backend.
