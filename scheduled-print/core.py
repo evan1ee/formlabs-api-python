@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import threading
@@ -136,6 +137,22 @@ class Scheduler:
         return any(j.status in (PENDING, RUNNING) for j in self.jobs)
 
 
+_CREATE_NO_WINDOW = 0x08000000
+_real_create_subprocess_exec = asyncio.create_subprocess_exec
+
+
+async def _spawn_without_console(program, *args, **kwargs):
+    if os.name == "nt" and Path(str(program)).name.lower() == "preformserver.exe":
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | _CREATE_NO_WINDOW
+    return await _real_create_subprocess_exec(program, *args, **kwargs)
+
+
+def hide_server_console() -> None:
+    """The SDK starts PreFormServer.exe as a console program, which pops up a terminal window from a GUI app.
+    The SDK has no option for this, so wrap process creation to add CREATE_NO_WINDOW for that one program."""
+    asyncio.create_subprocess_exec = _spawn_without_console
+
+
 def find_server_exe(configured: str = "") -> str:
     """The PreFormServer.exe to launch: the configured path, FL_PREFORM_SERVER_EXE, or one under Program Files\\Formlabs."""
     for candidate in (configured, os.environ.get("FL_PREFORM_SERVER_EXE", "")):
@@ -199,6 +216,7 @@ class PreFormBackend:
         """Start PreFormServer and keep it running until stop_server(). A server already running is left alone."""
         from formlabs_sdk import FormlabsClient
 
+        hide_server_console()
         with self._owner_lock:
             if self._owner is not None or self.server_reachable():
                 return
@@ -227,6 +245,7 @@ class PreFormBackend:
         from formlabs_sdk import FormlabsClient  # imported lazily so the core is testable without the SDK
 
         client = FormlabsClient()
+        hide_server_console()
         exe = find_server_exe(self.server_exe()) if start_server else ""
         if exe:
             # Use a server that is already running; otherwise start one and stop it when the call is done.

@@ -118,3 +118,20 @@ def test_find_server_exe_standalone_nested_folder(tmp_path, monkeypatch):
     monkeypatch.delenv("FL_PREFORM_SERVER_EXE", raising=False)
     monkeypatch.setattr(core, "STANDALONE_DIR", tmp_path)
     assert core.find_server_exe("") == str(exe)
+
+
+def test_server_is_spawned_without_a_console_window(monkeypatch):
+    import asyncio
+
+    seen = {}
+
+    async def fake(program, *args, **kwargs):
+        seen.update(program=program, **kwargs)
+
+    monkeypatch.setattr(core, "_real_create_subprocess_exec", fake)
+    asyncio.run(core._spawn_without_console("C:/x/PreFormServer.exe", "--port", "1"))
+    seen.clear()
+    asyncio.run(core._spawn_without_console("C:/x/other.exe"))
+    assert seen["program"] == "C:/x/other.exe" and "creationflags" not in seen  # only the server is changed
+    asyncio.run(core._spawn_without_console("C:/x/PreFormServer.exe"))
+    assert seen["creationflags"] == core._CREATE_NO_WINDOW
